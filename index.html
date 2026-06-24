@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MeetingMind AI</title>
+  <style>
+    /* ── Reset & Base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f14;
+      --surface:   #161a22;
+      --border:    #252b38;
+      --accent:    #6c63ff;
+      --accent-h:  #8b85ff;
+      --gold:      #f5a623;
+      --text:      #e8eaf0;
+      --muted:     #7a849a;
+      --error:     #ff5c5c;
+      --success:   #4caf50;
+      --radius:    12px;
+      --font:      'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+    }
+
+    /* ── Header ── */
+    header {
+      width: 100%;
+      max-width: 760px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 36px;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-icon { font-size: 1.5rem; }
+
+    .badge {
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 99px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    #btn-config {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: border-color 0.2s, color 0.2s;
+    }
+    #btn-config:hover { border-color: var(--accent); color: var(--text); }
+
+    /* ── Config Panel ── */
+    #config-panel {
+      width: 100%;
+      max-width: 760px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 24px;
+      display: none;
+    }
+    #config-panel.open { display: block; }
+    #config-panel label { font-size: 0.8rem; color: var(--muted); display: block; margin-bottom: 6px; font-weight: 600; }
+    #config-panel input, #config-panel select, #config-panel textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      font-family: var(--font);
+    }
+    #config-panel input:focus, #config-panel select:focus, #config-panel textarea:focus { border-color: var(--accent); }
+    #groq-key-status, #template-hint { font-size: 0.78rem; margin-top: 8px; color: var(--muted); }
+
+    .key-divider {
+      border-top: 1px solid var(--border);
+      margin-top: 18px;
+      padding-top: 16px;
+    }
+
+    .btn-save {
+      margin-top: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 20px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-save:hover { background: var(--accent-h); }
+
+    #custom-template-input {
+      display: none;
+      margin-top: 10px;
+      min-height: 90px;
+      resize: vertical;
+      line-height: 1.5;
+    }
+    #custom-template-input.visible { display: block; }
+
+    /* ── Main Card ── */
+    .card {
+      width: 100%;
+      max-width: 760px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    /* ── Action Buttons ── */
+    .actions {
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .actions-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; width: 100%; }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 24px;
+      border-radius: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-h); }
+    .btn-primary.recording { background: var(--error); animation: pulse 1.4s ease-in-out infinite; }
+
+    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--accent); }
+
+    .btn-danger { background: transparent; color: var(--error); border: 1px solid var(--error); }
+    .btn-danger:hover:not(:disabled) { background: rgba(255, 92, 92, 0.1); }
+
+    #btn-analyze {
+      width: 100%;
+      justify-content: center;
+      padding: 16px;
+      font-size: 1.05rem;
+      background: linear-gradient(135deg, var(--accent), #9b51e0);
+      box-shadow: 0 4px 15px rgba(108, 99, 255, 0.3);
+    }
+    #btn-analyze:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(108, 99, 255, 0.4); }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255,92,92,0.5); }
+      50%       { box-shadow: 0 0 0 8px rgba(255,92,92,0); }
+    }
+
+    #status-dot {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 5px 14px;
+      border-radius: 99px;
+      border: 1px solid var(--border);
+      margin-top: 8px;
+    }
+    #status-dot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+    #status-dot.active .dot { background: var(--success); }
+    #status-dot.loading .dot { background: var(--gold); animation: blink 0.8s step-start infinite; }
+    #status-dot.error .dot  { background: var(--error); }
+
+    @keyframes blink { 50% { opacity: 0; } }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; border-top: 1px solid var(--border); }
+    .tab {
+      flex: 1; padding: 14px; text-align: center; font-size: 0.88rem; color: var(--muted);
+      cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.2s, border-color 0.2s;
+      background: none; border-top: none; border-left: none; border-right: none;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── Tab Content ── */
+    .tab-pane { display: none; padding: 24px; min-height: 200px; }
+    .tab-pane.active { display: block; }
+
+    #transcript-box {
+      background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+      padding: 16px; min-height: 120px; font-size: 0.9rem; line-height: 1.7;
+      color: var(--text); white-space: pre-wrap; word-break: break-word;
+    }
+
+    /* ── Notes ── */
+    .notes-header { display: flex; justify-content: flex-end; margin-bottom: 18px; gap: 10px; }
+    .btn-copy-notion {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      padding: 8px 16px; border-radius: 8px; font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; transition: border-color 0.2s, color 0.2s; display: flex; align-items: center; gap: 6px;
+    }
+    .btn-copy-notion:hover { border-color: var(--accent); color: var(--accent); }
+
+    .note-section { margin-bottom: 24px; }
+    .note-section h3 {
+      font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 12px;
+    }
+
+    .note-content {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 8px; padding: 16px; font-size: 0.9rem; line-height: 1.7; color: var(--text);
+    }
+
+    /* ── Bloques de Tema (Estilo Notion) ── */
+    .tema-block { margin-bottom: 18px; }
+    .tema-block:last-child { margin-bottom: 0; }
+    .tema-block h4 {
+      color: var(--text); font-size: 0.95rem; font-weight: 600; margin-bottom: 8px; margin-top: 0;
+    }
+    .tema-puntos {
+      list-style: disc; margin-left: 22px; color: var(--muted);
+      line-height: 1.6; font-size: 0.88rem; margin-top: 0; padding-left: 0;
+    }
+    .tema-puntos li { margin-bottom: 6px; }
+
+    .task-item {
+      display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .task-item:last-child { border-bottom: none; }
+    .task-check {
+      width: 16px; height: 16px; border: 2px solid var(--accent);
+      border-radius: 4px; margin-top: 2px; flex-shrink: 0;
+    }
+
+    /* ── Error / Empty states ── */
+    .state-msg {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 8px; padding: 32px; color: var(--muted); font-size: 0.9rem; text-align: center;
+    }
+    .state-msg.error-msg { color: var(--error); }
+    .state-msg .big { font-size: 2rem; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: #222733; border: 1px solid var(--border); color: var(--text);
+      padding: 12px 22px; border-radius: 10px; font-size: 0.88rem;
+      transition: transform 0.3s ease; z-index: 999; white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    @media (max-width: 520px) {
+      .btn { padding: 11px 18px; font-size: 0.88rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <span class="logo-icon">🧠</span>
+    <span>MeetingMind</span>
+    <span class="badge">AI</span>
+  </div>
+  <button id="btn-config">⚙️ Configuración</button>
+</header>
+
+<div id="config-panel">
+  <label for="groq-key-input">Groq — API Key (Motor Único: Transcripción y Análisis)</label>
+  <input type="password" id="groq-key-input" placeholder="gsk_..." autocomplete="off" />
+  <button id="btn-save-groq-key" class="btn-save">Guardar clave Groq</button>
+  <div id="groq-key-status">La clave se guarda solo en tu dispositivo (localStorage).</div>
+
+  <div class="key-divider">
+    <label for="model-select">Modelo de Inteligencia Artificial (Texto)</label>
+    <select id="model-select">
+      <option value="llama-3.3-70b-versatile">🧠 Llama 3.3 70B (Recomendado - Súper Inteligente)</option>
+      <option value="llama-3.1-8b-instant">⚡ Llama 3.1 8B (El más rápido)</option>
+      <option value="mixtral-8x7b-32768">💡 Mixtral 8x7B (Excelente para textos larguísimos)</option>
+    </select>
+  </div>
+
+  <div class="key-divider">
+    <label for="template-select">Formato de Apuntes</label>
+    <select id="template-select">
+      <option value="auto">✨ Auto (Predeterminado)</option>
+      <option value="trabajo">🏢 Reunión de Trabajo</option>
+      <option value="clase">📚 Clase Universitaria</option>
+      <option value="custom">✍️ Personalizado</option>
+    </select>
+    <textarea id="custom-template-input" placeholder="Escribe tus propias reglas (ej. 'Enfócate en fórmulas y cálculos')…"></textarea>
+    <div id="template-hint">Se aplica automáticamente en tu próximo análisis con Groq.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="actions">
+    <span class="actions-label">Añadir contenido a la sesión</span>
+    
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="btn-mic">🎙️ Dictar</button>
+      <button class="btn btn-secondary" id="btn-upload">📂 Subir Audio (+)</button>
+      <button class="btn btn-danger" id="btn-clear" style="display:none;" title="Borrar todo e iniciar de cero">🗑️</button>
+    </div>
+    
+    <!-- Botón Maestro de Análisis -->
+    <div class="btn-row" style="margin-top: 16px;">
+      <button class="btn btn-primary" id="btn-analyze" style="display:none;">🧠 Generar Notas Inteligentes</button>
+    </div>
+
+    <input type="file" id="file-input" accept="audio/*" style="display:none" />
+    <div id="status-dot"><span class="dot"></span><span id="status-text">Listo. Sube o dicta un audio.</span></div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="transcripcion">📄 Transcripción Acumulada</button>
+    <button class="tab" data-tab="notas">✨ Notas Inteligentes</button>
+  </div>
+
+  <div class="tab-pane active" id="tab-transcripcion">
+    <div class="notes-header">
+      <button id="btn-copy-transcript" class="btn-copy-notion">📋 Copiar Todo</button>
+    </div>
+    <div id="transcript-box">
+      <span style="color:var(--muted)">La transcripción aparecerá aquí. Puedes subir varios audios de 25MB y se irán sumando...</span>
+    </div>
+  </div>
+
+  <div class="tab-pane" id="tab-notas">
+    <div id="notes-container">
+      <div class="state-msg">
+        <span class="big">✨</span>
+        <span>Sube tus audios primero y luego haz clic en "Generar Notas Inteligentes".</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════
+//  CONSTANTES Y ESTADO GLOBAL
+// ══════════════════════════════════════════════
+const GROQ_AUDIO_MODEL = 'whisper-large-v3-turbo';
+const GROQ_AUDIO_URL   = 'https://api.groq.com/openai/v1/audio/transcriptions';
+const GROQ_CHAT_URL    = 'https://api.groq.com/openai/v1/chat/completions';
+
+const LS_KEY_GROQ   = 'meetingmind_groq_api_key';
+const LS_KEY_TEMPLATE = 'meetingmind_template';
+const LS_KEY_TEMPLATE_CUSTOM = 'meetingmind_template_custom';
+const LS_KEY_MODEL = 'meetingmind_groq_text_model';
+
+let recognition = null;
+let isRecording = false;
+let shouldRestart = false;
+let accumulatedTranscript = ''; // TEXTO ACUMULADO DE TODA LA SESIÓN
+let currentParsedData = null; 
+
+window.addEventListener('DOMContentLoaded', () => {
+  try { initUI(); } catch (err) { alert('Error al inicializar la app: ' + err.message); }
+});
+
+function initUI() {
+  const btnConfig = document.getElementById('btn-config');
+  const configPanel = document.getElementById('config-panel');
+  const groqKeyInput = document.getElementById('groq-key-input');
+  const groqKeyStatus = document.getElementById('groq-key-status');
+  const templateSelect = document.getElementById('template-select');
+  const customTemplateInput = document.getElementById('custom-template-input');
+  const modelSelect = document.getElementById('model-select');
+  
+  const btnMic = document.getElementById('btn-mic');
+  const btnUpload = document.getElementById('btn-upload');
+  const btnAnalyze = document.getElementById('btn-analyze');
+  const btnClear = document.getElementById('btn-clear');
+  const fileInput = document.getElementById('file-input');
+  const tabs = document.querySelectorAll('.tab');
+  const tabPanes = document.querySelectorAll('.tab-pane');
+
+  // Inicializar credenciales Groq
+  const savedGroqKey = localStorage.getItem(LS_KEY_GROQ) || '';
+  groqKeyInput.value = savedGroqKey;
+  updateGroqKeyStatus(savedGroqKey, groqKeyStatus);
+
+  // Inicializar selector de modelo
+  modelSelect.value = localStorage.getItem(LS_KEY_MODEL) || 'llama-3.3-70b-versatile';
+  modelSelect.addEventListener('change', () => {
+    localStorage.setItem(LS_KEY_MODEL, modelSelect.value);
+  });
+
+  // Inicializar plantillas
+  templateSelect.value = localStorage.getItem(LS_KEY_TEMPLATE) || 'auto';
+  customTemplateInput.value = localStorage.getItem(LS_KEY_TEMPLATE_CUSTOM) || '';
+  syncCustomTemplateVisibility(templateSelect, customTemplateInput);
+
+  templateSelect.addEventListener('change', () => {
+    localStorage.setItem(LS_KEY_TEMPLATE, templateSelect.value);
+    syncCustomTemplateVisibility(templateSelect, customTemplateInput);
+  });
+
+  customTemplateInput.addEventListener('input', () => {
+    localStorage.setItem(LS_KEY_TEMPLATE_CUSTOM, customTemplateInput.value);
+  });
+
+  document.getElementById('btn-save-groq-key').addEventListener('click', () => {
+    const k = groqKeyInput.value.trim();
+    if (!k) { showToast('⚠️ Escribe una API Key de Groq.'); return; }
+    localStorage.setItem(LS_KEY_GROQ, k);
+    updateGroqKeyStatus(k, groqKeyStatus);
+    showToast('✅ API Key de Groq guardada.');
+  });
+
+  btnConfig.addEventListener('click', () => configPanel.classList.toggle('open'));
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tabPanes.forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('tab-' + tab.dataset.tab)?.classList.add('active');
+    });
+  });
+
+  // Botón Copiar Transcripción
+  const btnCopyTranscript = document.getElementById('btn-copy-transcript');
+  if (btnCopyTranscript) {
+    btnCopyTranscript.addEventListener('click', () => {
+      const text = accumulatedTranscript.trim();
+      if (!text) { showToast('⚠️ No hay texto para copiar'); return; }
+      navigator.clipboard.writeText(text)
+        .then(() => showToast('✅ Transcripción copiada'))
+        .catch(() => showToast('⚠️ Error al copiar transcripción'));
+    });
+  }
+
+  // Interacciones principales
+  btnMic.addEventListener('click', () => {
+    if (isRecording) stopRecording(btnMic);
+    else startRecording(btnMic, document.getElementById('transcript-box'));
+  });
+
+  btnUpload.addEventListener('click', () => {
+    if (isRecording) { showToast('Detén el micrófono primero.'); return; }
+    fileInput.click();
+  });
+
+  btnAnalyze.addEventListener('click', () => {
+    if (!accumulatedTranscript.trim()) return;
+    analyzeText(accumulatedTranscript.trim(), document.getElementById('notes-container'));
+  });
+
+  btnClear.addEventListener('click', () => {
+    if(confirm('¿Estás seguro de borrar toda la transcripción actual para empezar una nueva sesión?')) {
+      resetSession();
+    }
+  });
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    fileInput.value = '';
+    if (!file) return;
+    try {
+      await handleAudioFile(file, document.getElementById('transcript-box'), btnMic, btnUpload, btnAnalyze);
+    } catch (err) {
+      showError(`Error inesperado: ${err.message}`);
+      setStatus('error', 'Error al procesar');
+      enableButtons(btnMic, btnUpload, btnAnalyze);
+    }
+  });
+}
+
+function syncCustomTemplateVisibility(selectEl, textEl) {
+  if (selectEl.value === 'custom') { textEl.classList.add('visible'); } 
+  else { textEl.classList.remove('visible'); }
+}
+
+function getTemplateContext() {
+  const sel = localStorage.getItem(LS_KEY_TEMPLATE) || 'auto';
+  if (sel === 'trabajo') return "Contexto: Reunión laboral/gubernamental. Toma apuntes exhaustivos, detallados y estructurados enfocados en decisiones, proyectos y siguientes pasos.";
+  if (sel === 'clase') return "Contexto: Clase académica universitaria. Toma apuntes exhaustivos, detallados y estructurados enfocados en conceptos clave, teorías, fórmulas y asignaciones.";
+  if (sel === 'custom') return "Instrucciones personalizadas: " + (localStorage.getItem(LS_KEY_TEMPLATE_CUSTOM) || "Analiza el texto y toma apuntes estructurados.");
+  return "Deduce el contexto automáticamente y toma apuntes exhaustivos, detallados y estructurados.";
+}
+
+function resetSession() {
+  accumulatedTranscript = '';
+  document.getElementById('transcript-box').innerHTML = '<span style="color:var(--muted)">La transcripción aparecerá aquí. Puedes subir varios audios de 25MB y se irán sumando...</span>';
+  document.getElementById('notes-container').innerHTML = '<div class="state-msg"><span class="big">✨</span><span>Sube tus audios primero y luego haz clic en "Generar Notas Inteligentes".</span></div>';
+  document.getElementById('btn-analyze').style.display = 'none';
+  document.getElementById('btn-clear').style.display = 'none';
+  setStatus('idle', 'Listo. Sube o dicta un audio.');
+  showToast('🗑️ Sesión limpiada');
+}
+
+// ══════════════════════════════════════════════
+//  GRABACIÓN EN VIVO (Web Speech API)
+// ══════════════════════════════════════════════
+function startRecording(btnMic, transcriptBox) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { showError('Navegador no soporta reconocimiento de voz.'); return; }
+
+  // NOTA: Ya no borramos 'accumulatedTranscript' aquí, para que se sume a lo ya subido.
+  shouldRestart = true; isRecording = true;
+  btnMic.textContent = '⏹️ Detener'; btnMic.classList.add('recording');
+  setStatus('active', 'Escuchando micrófono…'); 
+  
+  if (!accumulatedTranscript.trim()) {
+    transcriptBox.textContent = ''; // Limpiar mensaje inicial
+  }
+  
+  _startSession(SR, transcriptBox);
+}
+
+function _startSession(SR, transcriptBox) {
+  if (!shouldRestart) return;
+  const rec = new SR();
+  recognition = rec;
+  rec.lang = 'es-ES'; rec.continuous = false; rec.interimResults = true; rec.maxAlternatives = 1;
+
+  let sessionInterim = '';
+  rec.onresult = (event) => {
+    sessionInterim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) { 
+        // Añadir salto de línea si es necesario antes de anexar
+        accumulatedTranscript += (accumulatedTranscript && !accumulatedTranscript.endsWith('\n') ? ' ' : '') + t + ' '; 
+        sessionInterim = ''; 
+      }
+      else { sessionInterim += t; }
+    }
+    transcriptBox.textContent = accumulatedTranscript + sessionInterim;
+  };
+
+  rec.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') console.error(e.error); };
+  rec.onend = () => { if (shouldRestart && isRecording) setTimeout(() => _startSession(SR, transcriptBox), 100); };
+  try { rec.start(); } catch (e) {}
+}
+
+function stopRecording(btnMic) {
+  shouldRestart = false; isRecording = false;
+  if (recognition) { recognition.onend = null; recognition.onerror = null; try { recognition.stop(); } catch(e){} recognition = null; }
+  
+  btnMic.textContent = '🎙️ Dictar'; btnMic.classList.remove('recording'); 
+  setStatus('idle', 'Pausado. Puedes subir audios o generar notas.');
+  
+  const text = accumulatedTranscript.trim();
+  if (text) {
+    document.getElementById('transcript-box').textContent = text;
+    document.getElementById('btn-analyze').style.display = 'flex';
+    document.getElementById('btn-clear').style.display = 'block';
+  } else {
+    showToast('No se detectó voz.');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  SUBIR ARCHIVO Y ACUMULAR (GROQ AUDIO)
+// ══════════════════════════════════════════════
+async function handleAudioFile(file, transcriptBox, btnMic, btnUpload, btnAnalyze) {
+  shouldRestart = false; isRecording = false; 
+  if (recognition) { recognition.onend = null; try { recognition.stop(); } catch(e){} recognition = null; }
+  resetMicButton(btnMic);
+
+  disableButtons(btnMic, btnUpload, btnAnalyze);
+  const groqKey = (localStorage.getItem(LS_KEY_GROQ) || '').trim();
+
+  if (!groqKey) { enableButtons(btnMic, btnUpload); setStatus('error', 'Falta API Groq'); showError('Introduce tu Groq API Key en la configuración.'); return; }
+
+  try {
+    setStatus('loading', `Transcribiendo parte: "${file.name}"…`);
+    
+    // Si la caja está vacía (tiene el placeholder), la limpiamos
+    if (!accumulatedTranscript.trim()) transcriptBox.textContent = '';
+    
+    // Indicador visual temporal en la caja de texto
+    const tempIndicator = document.createElement('div');
+    tempIndicator.style.color = 'var(--gold)';
+    tempIndicator.style.margin = '10px 0';
+    tempIndicator.textContent = `⏳ Transcribiendo archivo: ${file.name}...`;
+    transcriptBox.appendChild(tempIndicator);
+
+    const transcript = await transcribeWithGroq(file, groqKey);
+    tempIndicator.remove(); // Quitar el indicador de carga
+
+    if (transcript && transcript.trim()) {
+      // Unir la nueva transcripción a lo que ya existía (separado por doble salto de línea)
+      if (accumulatedTranscript.trim()) accumulatedTranscript += '\n\n';
+      accumulatedTranscript += transcript.trim();
+      
+      transcriptBox.textContent = accumulatedTranscript;
+      showToast('✅ Audio añadido a la sesión.');
+      
+      // Mostrar los botones de acciones
+      btnAnalyze.style.display = 'flex';
+      document.getElementById('btn-clear').style.display = 'block';
+      setStatus('idle', 'Sube otro audio o genera las notas.');
+    } else {
+      showToast('⚠️ El audio no contenía voz detectable.');
+      setStatus('idle', 'Audio vacío.');
+    }
+  } catch (err) {
+    showError(err.message);
+    setStatus('error', 'Error en proceso');
+  } finally {
+    enableButtons(btnMic, btnUpload, btnAnalyze);
+  }
+}
+
+async function transcribeWithGroq(file, apiKey) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('model', GROQ_AUDIO_MODEL);
+  formData.append('response_format', 'json');
+  formData.append('language', 'es');
+
+  let response;
+  try {
+    response = await fetch(GROQ_AUDIO_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}` }, body: formData });
+  } catch (e) { throw new Error(`[Red] ${e.message}`); }
+
+  let data; try { data = await response.json(); } catch { throw new Error(`Respuesta no-JSON al transcribir.`); }
+  if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status} al transcribir`);
+  if (typeof data?.text !== 'string') throw new Error('Respuesta de transcripción sin texto.');
+  return data.text;
+}
+
+// ══════════════════════════════════════════════
+//  ANÁLISIS DE TEXTO ACUMULADO (GROQ Llama)
+// ══════════════════════════════════════════════
+async function analyzeText(text, notesContainer) {
+  const apiKey = (localStorage.getItem(LS_KEY_GROQ) || '').trim();
+  if (!apiKey) { setStatus('error', 'Sin API Key'); showError('Introduce tu API Key de Groq.'); return; }
+
+  const btnAnalyze = document.getElementById('btn-analyze');
+  disableButtons(document.getElementById('btn-mic'), document.getElementById('btn-upload'), btnAnalyze);
+  setStatus('loading', 'Estructurando apuntes de toda la sesión…');
+
+  const contextInstruction = getTemplateContext();
+  const currentModel = localStorage.getItem(LS_KEY_MODEL) || 'llama-3.3-70b-versatile';
+  
+  const payload = {
+    model: currentModel,
+    messages: [
+      {
+        role: "system",
+        content: `Actúa como un experto tomando notas (para estudio universitario o reuniones técnicas). Tu objetivo es extraer apuntes exhaustivos, detallados y estructurados, asegurando que no se pierdan detalles clave, fórmulas o decisiones.\n\n${contextInstruction}\n\nResponde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta (no agregues markdown adicional ni texto fuera del JSON):\n{\n  "resumen": "Síntesis exhaustiva del contexto general...",\n  "temas": [\n    {\n      "titulo": "Nombre del Tema o Contexto",\n      "puntos": ["Apunte clave detallado 1", "Apunte clave detallado 2"]\n    }\n  ],\n  "tareas": ["tarea accionable 1"]\n}`
+      },
+      {
+        role: "user",
+        content: `TRANSCRIPCIÓN COMPLETA DE LA SESIÓN:\n${text}`
+      }
+    ],
+    temperature: 0.2,
+    response_format: { type: "json_object" } 
+  };
+
+  try {
+    const result = await callGroqChat(payload, apiKey);
+    const parsed = parseJSONResponse(result);
+    parsed.transcripcion = text;
+    currentParsedData = parsed; 
+    
+    renderNotes(parsed, notesContainer);
+    setStatus('active', 'Análisis completo');
+    showToast('✅ Apuntes generados con éxito');
+    document.querySelector('[data-tab="notas"]')?.click();
+  } catch (err) {
+    showError(`Error al estructurar notas: ${err.message}`);
+    setStatus('error', 'Error en apuntes');
+  } finally {
+    enableButtons(document.getElementById('btn-mic'), document.getElementById('btn-upload'), btnAnalyze);
+  }
+}
+
+async function _fetchGroqChat(payload, apiKey) {
+  let response;
+  try {
+    response = await fetch(GROQ_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) { const err = new Error(`[Red] ${e.message}`); err.retryable = false; throw err; }
+
+  let data; try { data = await response.json(); } catch { data = {}; }
+  if (!response.ok) {
+    const e = new Error(data?.error?.message || `HTTP ${response.status}`);
+    e.retryable = (response.status === 429 || response.status >= 500);
+    throw e;
+  }
+  const text = data?.choices?.[0]?.message?.content;
+  if (!text) { const e = new Error('Respuesta vacía o formato incorrecto de Llama.'); e.retryable = false; throw e; }
+  return text;
+}
+
+function waitWithCountdown(ms) {
+  return new Promise(resolve => {
+    let rem = Math.ceil(ms / 1000);
+    setStatus('loading', `Reintentando en ${rem}s…`);
+    const iv = setInterval(() => {
+      rem--;
+      if (rem <= 0) { clearInterval(iv); resolve(); } 
+      else { setStatus('loading', `Reintentando en ${rem}s…`); }
+    }, 1000);
+  });
+}
+
+async function callGroqChat(payload, apiKey) {
+  const RETRY_DELAYS = [2000, 5000, 10000];
+  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try { return await _fetchGroqChat(payload, apiKey); } 
+    catch (err) {
+      if (!err.retryable || attempt === MAX_ATTEMPTS) throw err;
+      await waitWithCountdown(RETRY_DELAYS[attempt - 1]);
+    }
+  }
+}
+
+function parseJSONResponse(raw) {
+  let clean = raw.trim().replace(/^```json\s*/i, '').replace(/^
+```\s*/i, '').replace(/\s*```$/, '').trim();
+  try { return JSON.parse(clean); } catch { return { resumen: raw, temas: [], tareas: [] }; }
+}
+
+// ══════════════════════════════════════════════
+//  RENDER Y EXPORTACIÓN A NOTION
+// ══════════════════════════════════════════════
+function renderNotes(data, container) {
+  const temas = Array.isArray(data.temas) ? data.temas : [];
+  const tareas = Array.isArray(data.tareas) ? data.tareas : [];
+
+  const temasHtml = temas.length ? temas.map(t => {
+    const titulo = t.titulo || 'Tema';
+    const puntos = Array.isArray(t.puntos) ? t.puntos : [];
+    return `<div class="tema-block">
+              <h4>${escHtml(titulo)}</h4>
+              ${puntos.length ? `<ul class="tema-puntos">${puntos.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : ''}
+            </div>`;
+  }).join('') : '<span style="color:var(--muted)">Ninguno identificado.</span>';
+
+  const tareasHtml = tareas.length ? tareas.map(t => `<div class="task-item"><div class="task-check"></div><span>${escHtml(t)}</span></div>`).join('') : '<span style="color:var(--muted)">No se identificaron tareas.</span>';
+
+  container.innerHTML = `
+    <div class="notes-header">
+      <button id="btn-copy-notion" class="btn-copy-notion">📋 Copiar Apuntes</button>
+    </div>
+    <div class="note-section">
+      <h3>📋 Apuntes Generales</h3>
+      <div class="note-content">${escHtml(data.resumen || 'No disponible.')}</div>
+    </div>
+    <div class="note-section">
+      <h3>💡 Temas Hablados</h3>
+      <div class="note-content">${temasHtml}</div>
+    </div>
+    <div class="note-section">
+      <h3>✅ Tareas y Acciones</h3>
+      <div class="note-content">${tareasHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('btn-copy-notion').addEventListener('click', exportToNotion);
+}
+
+function exportToNotion() {
+  if (!currentParsedData) return;
+  const data = currentParsedData;
+  let md = `### Apuntes Generales\n${data.resumen || ''}\n\n`;
+
+  if (Array.isArray(data.temas) && data.temas.length) {
+    data.temas.forEach(t => {
+      md += `### ${t.titulo || 'Tema'}\n`;
+      if (Array.isArray(t.puntos)) {
+        t.puntos.forEach(p => md += `- ${p}\n`);
+      }
+      md += '\n';
+    });
+  }
+
+  if (Array.isArray(data.tareas) && data.tareas.length) {
+    md += `### Tareas y Acciones\n`;
+    data.tareas.forEach(t => md += `- [ ] ${t}\n`);
+  }
+
+  navigator.clipboard.writeText(md.trim())
+    .then(() => showToast('✅ Copiado al portapapeles listo para Notion'))
+    .catch(() => showToast('⚠️ Error al copiar al portapapeles'));
+}
+
+// ══════════════════════════════════════════════
+//  UTILIDADES FINALES
+// ══════════════════════════════════════════════
+function updateGroqKeyStatus(key, el) {
+  if (key.startsWith('gsk_') && key.length > 20) { el.textContent = '✅ API Key configurada correctamente.'; el.style.color = 'var(--success)'; } 
+  else if (key.length > 0) { el.textContent = '⚠️ Clave sospechosa (debe iniciar con gsk_).'; el.style.color = 'var(--gold)'; } 
+  else { el.textContent = 'Sin clave. Consíguela en console.groq.com'; el.style.color = 'var(--muted)'; }
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  if (!dot || !txt) return;
+  dot.className = '';
+  if (type === 'active') dot.classList.add('active');
+  if (type === 'loading') dot.classList.add('loading');
+  if (type === 'error') dot.classList.add('error');
+  txt.textContent = text;
+}
+
+function resetMicButton(btn) { btn.textContent = '🎙️ Dictar'; btn.classList.remove('recording'); }
+function disableButtons(...btns) { btns.forEach(b => { if (b) b.disabled = true; }); }
+function enableButtons(...btns) { btns.forEach(b => { if (b) b.disabled = false; }); }
+
+function showError(msg) {
+  const container = document.getElementById('notes-container');
+  if (container) {
+    container.innerHTML = `<div class="state-msg error-msg"><span class="big">⚠️</span><strong>Error detectado:</strong><span style="margin-top:8px; font-family:monospace; background:rgba(255,0,0,0.1); padding:8px; border-radius:4px; word-break:break-all;">${escHtml(msg)}</span></div>`;
+    document.querySelector('[data-tab="notas"]')?.click();
+  }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  const t = document.getElementById('toast'); if (!t) return;
+  t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function escHtml(str) { if (typeof str !== 'string') return ''; return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>
