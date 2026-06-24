@@ -774,8 +774,7 @@ async function callGroqChat(payload, apiKey) {
 }
 
 function parseJSONResponse(raw) {
-  let clean = raw.trim().replace(/^```json\s*/i, '').replace(/^
-```\s*/i, '').replace(/\s*```$/, '').trim();
+  let clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
   try { return JSON.parse(clean); } catch { return { resumen: raw, temas: [], tareas: [] }; }
 }
 
