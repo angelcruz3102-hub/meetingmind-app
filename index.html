@@ -262,9 +262,10 @@
     .note-content {
       background: var(--bg); border: 1px solid var(--border);
       border-radius: 8px; padding: 16px; font-size: 0.9rem; line-height: 1.7; color: var(--text);
+      white-space: pre-wrap; /* ← añadido para respetar saltos de línea */
     }
 
-    /* ── Bloques de Tema (Estilo Notion) ── */
+    /* ── Bloques de Tema ── */
     .tema-block { margin-bottom: 18px; }
     .tema-block:last-child { margin-bottom: 0; }
     .tema-block h4 {
@@ -275,16 +276,6 @@
       line-height: 1.6; font-size: 0.88rem; margin-top: 0; padding-left: 0;
     }
     .tema-puntos li { margin-bottom: 6px; }
-
-    .task-item {
-      display: flex; align-items: flex-start; gap: 10px; padding: 8px 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .task-item:last-child { border-bottom: none; }
-    .task-check {
-      width: 16px; height: 16px; border: 2px solid var(--accent);
-      border-radius: 4px; margin-top: 2px; flex-shrink: 0;
-    }
 
     /* ── Error / Empty states ── */
     .state-msg {
@@ -330,7 +321,6 @@
     <select id="model-select">
       <option value="llama-3.3-70b-versatile">🧠 Llama 3.3 70B (Recomendado - Súper Inteligente)</option>
       <option value="llama-3.1-8b-instant">⚡ Llama 3.1 8B (El más rápido)</option>
-      <option value="mixtral-8x7b-32768">💡 Mixtral 8x7B (Excelente para textos larguísimos)</option>
     </select>
   </div>
 
@@ -353,16 +343,16 @@
     
     <div class="btn-row">
       <button class="btn btn-secondary" id="btn-mic">🎙️ Dictar</button>
-      <button class="btn btn-secondary" id="btn-upload">📂 Subir Audio (+)</button>
+      <button class="btn btn-secondary" id="btn-upload" title="Puedes seleccionar varios archivos a la vez">📂 Subir Audios (+)</button>
       <button class="btn btn-danger" id="btn-clear" style="display:none;" title="Borrar todo e iniciar de cero">🗑️</button>
     </div>
     
-    <!-- Botón Maestro de Análisis -->
     <div class="btn-row" style="margin-top: 16px;">
       <button class="btn btn-primary" id="btn-analyze" style="display:none;">🧠 Generar Notas Inteligentes</button>
     </div>
 
-    <input type="file" id="file-input" accept="audio/*" style="display:none" />
+    <input type="file" id="file-input" accept="audio/*" multiple style="display:none" />
+    
     <div id="status-dot"><span class="dot"></span><span id="status-text">Listo. Sube o dicta un audio.</span></div>
   </div>
 
@@ -376,7 +366,7 @@
       <button id="btn-copy-transcript" class="btn-copy-notion">📋 Copiar Todo</button>
     </div>
     <div id="transcript-box">
-      <span style="color:var(--muted)">La transcripción aparecerá aquí. Puedes subir varios audios de 25MB y se irán sumando...</span>
+      <span style="color:var(--muted)">La transcripción aparecerá aquí. Puedes seleccionar múltiples audios y se procesarán en cola con pausas automáticas para evitar los límites de la API...</span>
     </div>
   </div>
 
@@ -408,7 +398,7 @@ const LS_KEY_MODEL = 'meetingmind_groq_text_model';
 let recognition = null;
 let isRecording = false;
 let shouldRestart = false;
-let accumulatedTranscript = ''; // TEXTO ACUMULADO DE TODA LA SESIÓN
+let accumulatedTranscript = ''; 
 let currentParsedData = null; 
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -432,18 +422,13 @@ function initUI() {
   const tabs = document.querySelectorAll('.tab');
   const tabPanes = document.querySelectorAll('.tab-pane');
 
-  // Inicializar credenciales Groq
   const savedGroqKey = localStorage.getItem(LS_KEY_GROQ) || '';
   groqKeyInput.value = savedGroqKey;
   updateGroqKeyStatus(savedGroqKey, groqKeyStatus);
 
-  // Inicializar selector de modelo
   modelSelect.value = localStorage.getItem(LS_KEY_MODEL) || 'llama-3.3-70b-versatile';
-  modelSelect.addEventListener('change', () => {
-    localStorage.setItem(LS_KEY_MODEL, modelSelect.value);
-  });
+  modelSelect.addEventListener('change', () => { localStorage.setItem(LS_KEY_MODEL, modelSelect.value); });
 
-  // Inicializar plantillas
   templateSelect.value = localStorage.getItem(LS_KEY_TEMPLATE) || 'auto';
   customTemplateInput.value = localStorage.getItem(LS_KEY_TEMPLATE_CUSTOM) || '';
   syncCustomTemplateVisibility(templateSelect, customTemplateInput);
@@ -462,7 +447,7 @@ function initUI() {
     if (!k) { showToast('⚠️ Escribe una API Key de Groq.'); return; }
     localStorage.setItem(LS_KEY_GROQ, k);
     updateGroqKeyStatus(k, groqKeyStatus);
-    showToast('✅ API Key de Groq guardada.');
+    showToast('✅ API Key guardada.');
   });
 
   btnConfig.addEventListener('click', () => configPanel.classList.toggle('open'));
@@ -476,7 +461,6 @@ function initUI() {
     });
   });
 
-  // Botón Copiar Transcripción
   const btnCopyTranscript = document.getElementById('btn-copy-transcript');
   if (btnCopyTranscript) {
     btnCopyTranscript.addEventListener('click', () => {
@@ -484,11 +468,10 @@ function initUI() {
       if (!text) { showToast('⚠️ No hay texto para copiar'); return; }
       navigator.clipboard.writeText(text)
         .then(() => showToast('✅ Transcripción copiada'))
-        .catch(() => showToast('⚠️ Error al copiar transcripción'));
+        .catch(() => showToast('⚠️ Error al copiar'));
     });
   }
 
-  // Interacciones principales
   btnMic.addEventListener('click', () => {
     if (isRecording) stopRecording(btnMic);
     else startRecording(btnMic, document.getElementById('transcript-box'));
@@ -505,17 +488,15 @@ function initUI() {
   });
 
   btnClear.addEventListener('click', () => {
-    if(confirm('¿Estás seguro de borrar toda la transcripción actual para empezar una nueva sesión?')) {
-      resetSession();
-    }
+    if(confirm('¿Estás seguro de borrar toda la transcripción para empezar de cero?')) resetSession();
   });
 
   fileInput.addEventListener('change', async () => {
-    const file = fileInput.files[0];
-    fileInput.value = '';
-    if (!file) return;
+    const files = Array.from(fileInput.files);
+    fileInput.value = ''; 
+    if (files.length === 0) return;
     try {
-      await handleAudioFile(file, document.getElementById('transcript-box'), btnMic, btnUpload, btnAnalyze);
+      await handleMultipleAudioFiles(files, document.getElementById('transcript-box'), btnMic, btnUpload, btnAnalyze);
     } catch (err) {
       showError(`Error inesperado: ${err.message}`);
       setStatus('error', 'Error al procesar');
@@ -525,26 +506,25 @@ function initUI() {
 }
 
 function syncCustomTemplateVisibility(selectEl, textEl) {
-  if (selectEl.value === 'custom') { textEl.classList.add('visible'); } 
-  else { textEl.classList.remove('visible'); }
+  if (selectEl.value === 'custom') { textEl.classList.add('visible'); } else { textEl.classList.remove('visible'); }
 }
 
 function getTemplateContext() {
   const sel = localStorage.getItem(LS_KEY_TEMPLATE) || 'auto';
-  if (sel === 'trabajo') return "Contexto: Reunión laboral/gubernamental. Toma apuntes exhaustivos, detallados y estructurados enfocados en decisiones, proyectos y siguientes pasos.";
-  if (sel === 'clase') return "Contexto: Clase académica universitaria. Toma apuntes exhaustivos, detallados y estructurados enfocados en conceptos clave, teorías, fórmulas y asignaciones.";
-  if (sel === 'custom') return "Instrucciones personalizadas: " + (localStorage.getItem(LS_KEY_TEMPLATE_CUSTOM) || "Analiza el texto y toma apuntes estructurados.");
-  return "Deduce el contexto automáticamente y toma apuntes exhaustivos, detallados y estructurados.";
+  if (sel === 'trabajo') return "Contexto: Reunión laboral. Captura todos los detalles exhaustivos, decisiones y discusiones sin resumir los puntos clave.";
+  if (sel === 'clase') return "Contexto: Clase universitaria. Captura todos los detalles exhaustivos, explicaciones teóricas y conceptos sin resumir los puntos clave.";
+  if (sel === 'custom') return "Instrucciones personalizadas: " + (localStorage.getItem(LS_KEY_TEMPLATE_CUSTOM) || "Analiza el texto y extrae detalles exhaustivos.");
+  return "Extrae los temas con detalles completos y exhaustivos del siguiente texto.";
 }
 
 function resetSession() {
   accumulatedTranscript = '';
-  document.getElementById('transcript-box').innerHTML = '<span style="color:var(--muted)">La transcripción aparecerá aquí. Puedes subir varios audios de 25MB y se irán sumando...</span>';
+  currentParsedData = null; // <-- limpiamos también el objeto de apuntes
+  document.getElementById('transcript-box').innerHTML = '<span style="color:var(--muted)">La transcripción aparecerá aquí...</span>';
   document.getElementById('notes-container').innerHTML = '<div class="state-msg"><span class="big">✨</span><span>Sube tus audios primero y luego haz clic en "Generar Notas Inteligentes".</span></div>';
   document.getElementById('btn-analyze').style.display = 'none';
   document.getElementById('btn-clear').style.display = 'none';
   setStatus('idle', 'Listo. Sube o dicta un audio.');
-  showToast('🗑️ Sesión limpiada');
 }
 
 // ══════════════════════════════════════════════
@@ -553,16 +533,10 @@ function resetSession() {
 function startRecording(btnMic, transcriptBox) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { showError('Navegador no soporta reconocimiento de voz.'); return; }
-
-  // NOTA: Ya no borramos 'accumulatedTranscript' aquí, para que se sume a lo ya subido.
   shouldRestart = true; isRecording = true;
   btnMic.textContent = '⏹️ Detener'; btnMic.classList.add('recording');
   setStatus('active', 'Escuchando micrófono…'); 
-  
-  if (!accumulatedTranscript.trim()) {
-    transcriptBox.textContent = ''; // Limpiar mensaje inicial
-  }
-  
+  if (!accumulatedTranscript.trim()) transcriptBox.textContent = ''; 
   _startSession(SR, transcriptBox);
 }
 
@@ -578,7 +552,6 @@ function _startSession(SR, transcriptBox) {
     for (let i = event.resultIndex; i < event.results.length; i++) {
       const t = event.results[i][0].transcript;
       if (event.results[i].isFinal) { 
-        // Añadir salto de línea si es necesario antes de anexar
         accumulatedTranscript += (accumulatedTranscript && !accumulatedTranscript.endsWith('\n') ? ' ' : '') + t + ' '; 
         sessionInterim = ''; 
       }
@@ -586,7 +559,6 @@ function _startSession(SR, transcriptBox) {
     }
     transcriptBox.textContent = accumulatedTranscript + sessionInterim;
   };
-
   rec.onerror = (e) => { if (e.error !== 'no-speech' && e.error !== 'aborted') console.error(e.error); };
   rec.onend = () => { if (shouldRestart && isRecording) setTimeout(() => _startSession(SR, transcriptBox), 100); };
   try { rec.start(); } catch (e) {}
@@ -595,71 +567,66 @@ function _startSession(SR, transcriptBox) {
 function stopRecording(btnMic) {
   shouldRestart = false; isRecording = false;
   if (recognition) { recognition.onend = null; recognition.onerror = null; try { recognition.stop(); } catch(e){} recognition = null; }
-  
   btnMic.textContent = '🎙️ Dictar'; btnMic.classList.remove('recording'); 
-  setStatus('idle', 'Pausado. Puedes subir audios o generar notas.');
-  
-  const text = accumulatedTranscript.trim();
-  if (text) {
-    document.getElementById('transcript-box').textContent = text;
+  setStatus('idle', 'Pausado. Puedes generar notas.');
+  if (accumulatedTranscript.trim()) {
+    document.getElementById('transcript-box').textContent = accumulatedTranscript;
     document.getElementById('btn-analyze').style.display = 'flex';
     document.getElementById('btn-clear').style.display = 'block';
-  } else {
-    showToast('No se detectó voz.');
   }
 }
 
 // ══════════════════════════════════════════════
-//  SUBIR ARCHIVO Y ACUMULAR (GROQ AUDIO)
+//  SUBIDA DE MULTIPLES AUDIOS CON PAUSA
 // ══════════════════════════════════════════════
-async function handleAudioFile(file, transcriptBox, btnMic, btnUpload, btnAnalyze) {
+async function handleMultipleAudioFiles(files, transcriptBox, btnMic, btnUpload, btnAnalyze) {
   shouldRestart = false; isRecording = false; 
   if (recognition) { recognition.onend = null; try { recognition.stop(); } catch(e){} recognition = null; }
   resetMicButton(btnMic);
-
   disableButtons(btnMic, btnUpload, btnAnalyze);
+  
   const groqKey = (localStorage.getItem(LS_KEY_GROQ) || '').trim();
-
   if (!groqKey) { enableButtons(btnMic, btnUpload); setStatus('error', 'Falta API Groq'); showError('Introduce tu Groq API Key en la configuración.'); return; }
 
-  try {
-    setStatus('loading', `Transcribiendo parte: "${file.name}"…`);
+  if (!accumulatedTranscript.trim()) transcriptBox.textContent = '';
+  
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    setStatus('loading', `Transcribiendo Audio ${i + 1} de ${files.length}: "${file.name}"…`);
     
-    // Si la caja está vacía (tiene el placeholder), la limpiamos
-    if (!accumulatedTranscript.trim()) transcriptBox.textContent = '';
-    
-    // Indicador visual temporal en la caja de texto
     const tempIndicator = document.createElement('div');
     tempIndicator.style.color = 'var(--gold)';
     tempIndicator.style.margin = '10px 0';
-    tempIndicator.textContent = `⏳ Transcribiendo archivo: ${file.name}...`;
+    tempIndicator.textContent = `⏳ Extrayendo texto del audio ${i + 1}/${files.length}...`;
     transcriptBox.appendChild(tempIndicator);
 
-    const transcript = await transcribeWithGroq(file, groqKey);
-    tempIndicator.remove(); // Quitar el indicador de carga
+    try {
+      const transcript = await transcribeWithGroq(file, groqKey);
 
-    if (transcript && transcript.trim()) {
-      // Unir la nueva transcripción a lo que ya existía (separado por doble salto de línea)
-      if (accumulatedTranscript.trim()) accumulatedTranscript += '\n\n';
-      accumulatedTranscript += transcript.trim();
-      
-      transcriptBox.textContent = accumulatedTranscript;
-      showToast('✅ Audio añadido a la sesión.');
-      
-      // Mostrar los botones de acciones
-      btnAnalyze.style.display = 'flex';
-      document.getElementById('btn-clear').style.display = 'block';
-      setStatus('idle', 'Sube otro audio o genera las notas.');
-    } else {
-      showToast('⚠️ El audio no contenía voz detectable.');
-      setStatus('idle', 'Audio vacío.');
+      if (transcript && transcript.trim()) {
+        if (accumulatedTranscript.trim()) accumulatedTranscript += '\n\n';
+        accumulatedTranscript += transcript.trim();
+        transcriptBox.textContent = accumulatedTranscript;
+        showToast(`✅ Audio ${i + 1} completado.`);
+      }
+    } catch (err) {
+      showToast(`❌ Fallo en audio "${file.name}": ${err.message}`);
+      // Continuamos con los demás archivos
+    } finally {
+      tempIndicator.remove(); // ← Siempre se limpia el indicador
     }
-  } catch (err) {
-    showError(err.message);
-    setStatus('error', 'Error en proceso');
-  } finally {
-    enableButtons(btnMic, btnUpload, btnAnalyze);
+
+    if (i < files.length - 1) {
+      setStatus('loading', `Pausa de seguridad (10s) para evitar bloqueo de API antes del próximo audio...`);
+      await new Promise(r => setTimeout(r, 10000));
+    }
   }
+  
+  btnAnalyze.style.display = 'flex';
+  document.getElementById('btn-clear').style.display = 'block';
+  setStatus('idle', 'Todos los audios procesados. Genera las notas.');
+  
+  enableButtons(btnMic, btnUpload, btnAnalyze);
 }
 
 async function transcribeWithGroq(file, apiKey) {
@@ -669,57 +636,84 @@ async function transcribeWithGroq(file, apiKey) {
   formData.append('response_format', 'json');
   formData.append('language', 'es');
 
-  let response;
-  try {
-    response = await fetch(GROQ_AUDIO_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}` }, body: formData });
-  } catch (e) { throw new Error(`[Red] ${e.message}`); }
-
-  let data; try { data = await response.json(); } catch { throw new Error(`Respuesta no-JSON al transcribir.`); }
+  let response = await fetch(GROQ_AUDIO_URL, { method: 'POST', headers: { 'Authorization': `Bearer ${apiKey}` }, body: formData });
+  let data = await response.json();
   if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status} al transcribir`);
-  if (typeof data?.text !== 'string') throw new Error('Respuesta de transcripción sin texto.');
-  return data.text;
+  return data.text || '';
 }
 
 // ══════════════════════════════════════════════
-//  ANÁLISIS DE TEXTO ACUMULADO (GROQ Llama)
+//  ANÁLISIS DE TEXTO - MODO EXHAUSTIVO Y LIMPIO
 // ══════════════════════════════════════════════
 async function analyzeText(text, notesContainer) {
   const apiKey = (localStorage.getItem(LS_KEY_GROQ) || '').trim();
-  if (!apiKey) { setStatus('error', 'Sin API Key'); showError('Introduce tu API Key de Groq.'); return; }
+  if (!apiKey) return;
 
   const btnAnalyze = document.getElementById('btn-analyze');
   disableButtons(document.getElementById('btn-mic'), document.getElementById('btn-upload'), btnAnalyze);
-  setStatus('loading', 'Estructurando apuntes de toda la sesión…');
 
   const contextInstruction = getTemplateContext();
   const currentModel = localStorage.getItem(LS_KEY_MODEL) || 'llama-3.3-70b-versatile';
   
-  const payload = {
-    model: currentModel,
-    messages: [
-      {
-        role: "system",
-        content: `Actúa como un experto tomando notas (para estudio universitario o reuniones técnicas). Tu objetivo es extraer apuntes exhaustivos, detallados y estructurados, asegurando que no se pierdan detalles clave, fórmulas o decisiones.\n\n${contextInstruction}\n\nResponde ÚNICAMENTE con un objeto JSON válido con esta estructura exacta (no agregues markdown adicional ni texto fuera del JSON):\n{\n  "resumen": "Síntesis exhaustiva del contexto general...",\n  "temas": [\n    {\n      "titulo": "Nombre del Tema o Contexto",\n      "puntos": ["Apunte clave detallado 1", "Apunte clave detallado 2"]\n    }\n  ],\n  "tareas": ["tarea accionable 1"]\n}`
-      },
-      {
-        role: "user",
-        content: `TRANSCRIPCIÓN COMPLETA DE LA SESIÓN:\n${text}`
-      }
-    ],
-    temperature: 0.2,
-    response_format: { type: "json_object" } 
-  };
+  const CHUNK_SIZE = 8000; 
+  const chunks = [];
+  for (let i = 0; i < text.length; i += CHUNK_SIZE) {
+    chunks.push(text.slice(i, i + CHUNK_SIZE));
+  }
 
+  let finalData = { titulo_principal: "", temas: [], resumen_final: "" };
+  
   try {
-    const result = await callGroqChat(payload, apiKey);
-    const parsed = parseJSONResponse(result);
-    parsed.transcripcion = text;
-    currentParsedData = parsed; 
+    for (let i = 0; i < chunks.length; i++) {
+      setStatus('loading', `Extrayendo detalles... Parte ${i + 1} de ${chunks.length}`);
+      
+      const payload = {
+        model: currentModel,
+        messages: [
+          {
+            role: "system",
+            content: `Actúas como un experto tomando notas exhaustivas. Tu objetivo es transformar la transcripción en un JSON válido.\n\n${contextInstruction}\n\nREGLA ESTRICTA 1: NO RESUMAS la información en la sección de temas. Sé exhaustivo, extrae todos los detalles, explicaciones y datos.\nREGLA ESTRICTA 2: Solo devuelve el JSON puro sin markdown.\n\nEstructura exacta a devolver:\n{\n  "titulo_principal": "Título de la clase o reunión",\n  "temas": [\n    {\n      "titulo": "Tema 1",\n      "detalles": ["Detalle completo y exhaustivo 1", "Detalle completo y exhaustivo 2"]\n    }\n  ],\n  "resumen_final": "Resumen global de todo al final"\n}`
+          },
+          {
+            role: "user",
+            content: `TRANSCRIPCIÓN PARTE ${i + 1}/${chunks.length}:\n${chunks[i]}`
+          }
+        ],
+        temperature: 0.1,
+        response_format: { type: "json_object" } 
+      };
+
+      try {
+        const result = await callGroqChat(payload, apiKey);
+        const parsed = parseJSONResponse(result);
+        
+        // Guardar el título solo en la primera parte
+        if (parsed.titulo_principal && !finalData.titulo_principal) finalData.titulo_principal = parsed.titulo_principal;
+        
+        if (Array.isArray(parsed.temas)) finalData.temas = finalData.temas.concat(parsed.temas);
+        // Evitamos concatenar "undefined"
+        if (typeof parsed.resumen_final === 'string' && parsed.resumen_final.trim()) {
+          finalData.resumen_final += (finalData.resumen_final ? "\n\n" : "") + parsed.resumen_final;
+        }
+      } catch (chunkErr) {
+        showToast(`⚠️ Error en parte ${i + 1}: ${chunkErr.message}`);
+        // Continuamos con el siguiente chunk
+      }
+
+      if (i < chunks.length - 1) {
+        setStatus('loading', `Pausa de seguridad (20s) protegiendo la cuota de la API...`);
+        await new Promise(r => setTimeout(r, 20000));
+      }
+    }
     
-    renderNotes(parsed, notesContainer);
+    finalData.transcripcion = text;
+    currentParsedData = finalData; 
+    
+    renderNotes(finalData, notesContainer);
     setStatus('active', 'Análisis completo');
-    showToast('✅ Apuntes generados con éxito');
+    showToast('✅ Notas detalladas generadas');
     document.querySelector('[data-tab="notas"]')?.click();
+    
   } catch (err) {
     showError(`Error al estructurar notas: ${err.message}`);
     setStatus('error', 'Error en apuntes');
@@ -728,118 +722,90 @@ async function analyzeText(text, notesContainer) {
   }
 }
 
-async function _fetchGroqChat(payload, apiKey) {
-  let response;
-  try {
-    response = await fetch(GROQ_CHAT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-      body: JSON.stringify(payload)
-    });
-  } catch (e) { const err = new Error(`[Red] ${e.message}`); err.retryable = false; throw err; }
-
-  let data; try { data = await response.json(); } catch { data = {}; }
-  if (!response.ok) {
-    const e = new Error(data?.error?.message || `HTTP ${response.status}`);
-    e.retryable = (response.status === 429 || response.status >= 500);
-    throw e;
-  }
-  const text = data?.choices?.[0]?.message?.content;
-  if (!text) { const e = new Error('Respuesta vacía o formato incorrecto de Llama.'); e.retryable = false; throw e; }
-  return text;
-}
-
-function waitWithCountdown(ms) {
-  return new Promise(resolve => {
-    let rem = Math.ceil(ms / 1000);
-    setStatus('loading', `Reintentando en ${rem}s…`);
-    const iv = setInterval(() => {
-      rem--;
-      if (rem <= 0) { clearInterval(iv); resolve(); } 
-      else { setStatus('loading', `Reintentando en ${rem}s…`); }
-    }, 1000);
-  });
-}
-
 async function callGroqChat(payload, apiKey) {
-  const RETRY_DELAYS = [2000, 5000, 10000];
-  const MAX_ATTEMPTS = RETRY_DELAYS.length + 1;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try { return await _fetchGroqChat(payload, apiKey); } 
-    catch (err) {
-      if (!err.retryable || attempt === MAX_ATTEMPTS) throw err;
-      await waitWithCountdown(RETRY_DELAYS[attempt - 1]);
-    }
-  }
+  let response = await fetch(GROQ_CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+    body: JSON.stringify(payload)
+  });
+  let data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || `Error HTTP ${response.status}`);
+  return data?.choices?.[0]?.message?.content || '{}';
 }
 
 function parseJSONResponse(raw) {
-    let clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
-  try { return JSON.parse(clean); } catch { return { resumen: raw, temas: [], tareas: [] }; }
+  let clean = raw.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/, '').trim();
+  try { 
+    return JSON.parse(clean); 
+  } catch (e) { 
+    return { titulo_principal: "Apuntes Generales", temas: [{ titulo: "Detalles", detalles: ["Se recuperó el texto, pero la IA falló el formato.", clean] }], resumen_final: "Error de formato." }; 
+  }
 }
 
 // ══════════════════════════════════════════════
-//  RENDER Y EXPORTACIÓN A NOTION
+//  RENDER UI Y EXPORTACIÓN A TEXTO LIMPIO
 // ══════════════════════════════════════════════
 function renderNotes(data, container) {
   const temas = Array.isArray(data.temas) ? data.temas : [];
-  const tareas = Array.isArray(data.tareas) ? data.tareas : [];
 
   const temasHtml = temas.length ? temas.map(t => {
     const titulo = t.titulo || 'Tema';
-    const puntos = Array.isArray(t.puntos) ? t.puntos : [];
+    const detalles = Array.isArray(t.detalles) ? t.detalles : [];
     return `<div class="tema-block">
-              <h4>${escHtml(titulo)}</h4>
-              ${puntos.length ? `<ul class="tema-puntos">${puntos.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : ''}
+              <h4 style="color:var(--accent);">${escHtml(titulo)}</h4>
+              ${detalles.length ? `<ul class="tema-puntos">${detalles.map(p => `<li>${escHtml(p)}</li>`).join('')}</ul>` : ''}
             </div>`;
   }).join('') : '<span style="color:var(--muted)">Ninguno identificado.</span>';
 
-  const tareasHtml = tareas.length ? tareas.map(t => `<div class="task-item"><div class="task-check"></div><span>${escHtml(t)}</span></div>`).join('') : '<span style="color:var(--muted)">No se identificaron tareas.</span>';
-
   container.innerHTML = `
     <div class="notes-header">
-      <button id="btn-copy-notion" class="btn-copy-notion">📋 Copiar Apuntes</button>
+      <button id="btn-copy-notion" class="btn-copy-notion">📋 Copiar Apuntes Limpios</button>
     </div>
-    <div class="note-section">
-      <h3>📋 Apuntes Generales</h3>
-      <div class="note-content">${escHtml(data.resumen || 'No disponible.')}</div>
+    
+    <div class="note-section" style="text-align: center; border-bottom: 1px solid var(--border); padding-bottom: 16px;">
+      <h2 style="color: #fff; margin-bottom: 8px;">${escHtml(data.titulo_principal || 'Apuntes de la Sesión')}</h2>
     </div>
-    <div class="note-section">
-      <h3>💡 Temas Hablados</h3>
+
+    <div class="note-section" style="margin-top: 20px;">
+      <h3>💡 Temas y Detalles Estructurados</h3>
       <div class="note-content">${temasHtml}</div>
     </div>
+    
     <div class="note-section">
-      <h3>✅ Tareas y Acciones</h3>
-      <div class="note-content">${tareasHtml}</div>
+      <h3>📝 Resumen Final</h3>
+      <div class="note-content">${escHtml(data.resumen_final || 'No disponible.')}</div>
     </div>
   `;
-
-  document.getElementById('btn-copy-notion').addEventListener('click', exportToNotion);
+  document.getElementById('btn-copy-notion').addEventListener('click', exportToCleanText);
 }
 
-function exportToNotion() {
+function exportToCleanText() {
   if (!currentParsedData) return;
   const data = currentParsedData;
-  let md = `### Apuntes Generales\n${data.resumen || ''}\n\n`;
+  
+  let cleanText = `========================================\n`;
+  cleanText += `  ${(data.titulo_principal || 'APUNTES DE LA SESIÓN').toUpperCase()}\n`;
+  cleanText += `========================================\n\n`;
 
   if (Array.isArray(data.temas) && data.temas.length) {
+    cleanText += `TEMAS Y DETALLES:\n`;
+    cleanText += `----------------------------------------\n`;
     data.temas.forEach(t => {
-      md += `### ${t.titulo || 'Tema'}\n`;
-      if (Array.isArray(t.puntos)) {
-        t.puntos.forEach(p => md += `- ${p}\n`);
+      cleanText += `• ${t.titulo || 'Tema'}:\n`;
+      if (Array.isArray(t.detalles)) {
+        t.detalles.forEach(d => cleanText += `  - ${d}\n`);
       }
-      md += '\n';
+      cleanText += `\n`;
     });
   }
 
-  if (Array.isArray(data.tareas) && data.tareas.length) {
-    md += `### Tareas y Acciones\n`;
-    data.tareas.forEach(t => md += `- [ ] ${t}\n`);
-  }
+  cleanText += `RESUMEN FINAL:\n`;
+  cleanText += `----------------------------------------\n`;
+  cleanText += `${data.resumen_final || ''}\n`;
 
-  navigator.clipboard.writeText(md.trim())
-    .then(() => showToast('✅ Copiado al portapapeles listo para Notion'))
-    .catch(() => showToast('⚠️ Error al copiar al portapapeles'));
+  navigator.clipboard.writeText(cleanText.trim())
+    .then(() => showToast('✅ Copiado en formato limpio'))
+    .catch(() => showToast('⚠️ Error al copiar'));
 }
 
 // ══════════════════════════════════════════════
